@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf-8"/>
+		<meta name="viewport" content="width=device-width,initial-scale=1.0,minimum-scale=1.0,maximum-scale=1.0" />
+		<title>websocket+python测试</title>
+		<style>
+			*{margin: 0px;padding: 0px;}
+			body{overflow: hidden;}
+			.container{position: absolute;top:50%;left:50%;width: 800px;height: 600px;margin-left: -400px;margin-top: -300px;text-align: center;}
+			#logzone{width: 640px;overflow-x: hidden;}
+			canvas{border: 1px solid red;}
+		</style>
+	</head>
+	<body>
+		<div class="container">
+			<canvas id="canvas" height="480" width="640"></canvas>
+			<textarea id="logzone"></textarea>
+		</div>
+	</body>
+</html>
+<script>
+	document.addEventListener("touchmove",function(e){e.preventDefault();},false);
+	var SENDER = false;
+	var log_h = document.getElementById("logzone");
+	var ctx = document.getElementById("canvas").getContext("2d");
+	var BEGIN_PATH = false;
+	var TWO_PI = 2 * Math.PI;
+	var GLOBAL_STACK = [];
+	function reset(){
+		ctx.putImageData(GLOBAL_STACK.pop(),0,0);
+	}
+	document.getElementById("canvas").addEventListener("mousedown",function(e){
+		SENDER = true;
+		if(!window.BEGIN_PATH){
+			window.BEGIN_PATH = true;
+			GLOBAL_STACK.push(ctx.getImageData(0,0,640,480));
+			socket.send("toServer:start");
+		}
+	},false);
+	document.getElementById("canvas").addEventListener("mousemove",function(e){
+		if(!window.BEGIN_PATH)return false;
+		ctx.beginPath();
+		ctx.fillStyle = "red";
+		ctx.arc(e.clientX - window.innerWidth / 2 + 320,e.clientY - window.innerHeight / 2 + 300,10,0,TWO_PI,1);
+		ctx.fill();
+		ctx.closePath();
+		socket.send("toServer:paint" + e.clientX + "," + e.clientY);
+	},false);
+	document.addEventListener("mouseup",function(e){
+		if(window.BEGIN_PATH){
+			window.BEGIN_PATH = false;
+			socket.send("toServer:end");
+		}
+	},false);
+	function log(msg){log_h.textContent += (new Date()).toLocaleTimeString() + "\t" + msg + "\n";}
+	(function(){
+		log("服务器连接中......");
+		if(navigator.userAgent.indexOf("Windows") >= 0)socket = new WebSocket("ws://127.0.0.1:9527");
+		else socket = new WebSocket("ws://192.168.1.101:9527");
+		socket.onopen = function(e){log("服务器连接成功!:)");}
+		socket.onmessage = function(e){
+			if(SENDER){
+				return false;
+			}
+			recv = e.data.substr(9)
+			console.log(recv)
+			if(recv.startsWith("start")){
+				GLOBAL_STACK.push(ctx.getImageData(0,0,640,480));
+				return true;
+			}
+			if(recv.startsWith("end")){
+				return true;
+			}
+			if(recv.startsWith("paint")){
+				recv = recv.substr(5)
+				arrt = recv.split(",")
+				ctx.beginPath();
+				ctx.fillStyle = "red";
+				ctx.arc(parseInt(arrt[0]) - window.innerWidth / 2 + 320,parseInt(arrt[1]) - window.innerHeight / 2 + 300,10,0,TWO_PI,1);
+				ctx.fill();
+				ctx.closePath();
+			}
+		}
+		socket.onerror = function(e){log("天啦撸,夭寿啦~");}
+		socket.onclose = function(e){log("与服务器的连接关闭了:(");}
+	})();
+</script>
